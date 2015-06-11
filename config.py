@@ -23,6 +23,6 @@ SUBREDDITS = [{'name': 'McGill University', 'subreddit': 'mcgill'},
 
 PRAW_USERNAME = 'elc-gt'
 PRAW_PASSWORD = 'password'
-CREDENTIALS = [ ('elc-gt', 'password'), 
-                ('elc-gt2', 'wallmoose17'), 
+CREDENTIALS = [ ('gt-elc', 'password'),
+                ('elc-gt', 'password'), 
                 ('elc-gt3', 'wallmoose17')]

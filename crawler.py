@@ -12,7 +12,7 @@ from Queue import Queue
 db = pymongo.MongoClient()['reddit']
 
 class RedditApiClient(object):
-    CLOUD_QUERY = 'timestamp:{start}..{end}'
+    CLOUD_QUERY = 'timestamp:{end}..{start}'
     CLOUD_SYNTAX = 'cloudsearch' 
 
     def __init__(self, username, password, start, end):
@@ -25,7 +25,7 @@ class RedditApiClient(object):
     def crawl(self, subreddit, limit=None, sort='new'):
         query = self.CLOUD_QUERY.format(start=self.start, end=self.end)
         print query , subreddit, sort , self.CLOUD_SYNTAX
-        return self.reddit.search('timestamp:1373932800..1474019200', subreddit=subreddit, sort=sort, limit=None,
+        return self.reddit.search(query, subreddit=subreddit, sort=sort, limit=None,
                 syntax=self.CLOUD_SYNTAX)
     
     def update(self, subreddit, limit=30):
@@ -61,26 +61,23 @@ class RedditApiClient(object):
 
 class RedditThread(threading.Thread):
 
-    def __init__(self, threadID, reddit_client, mongodb):
+    def __init__(self, threadID, reddit_client, mongodb, q):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.reddit_client = reddit_client
         self.mongodb = mongodb
+        self.q = q
         return
 
-    def run(self, college_info):
-        college, subreddit = college_info['name'] , college_info['subreddit']
-        posts = self.reddit_client.crawl('gatech')
-        for post in posts:
-            print post.title
-            post = self.reddit_client.serialize_post(post, college, subreddit)
-            self.mongodb.posts.insert(post)
-        return
-
-    def start(self, q):
-        while not q.empty():
-            self.run(q.get_nowait())
-
+    def run(self):
+        while not self.q.empty():
+            college_info = self.q.get_nowait()
+            college, subreddit = college_info['name'] , college_info['subreddit']
+            posts = self.reddit_client.crawl(subreddit)
+            for post in posts:
+                print self.threadID , college, post.title[:80]
+                post = self.reddit_client.serialize_post(post, college, subreddit)
+                self.mongodb.posts.insert(post)
     
 class MultiThreadedCrawler(object):
 
@@ -88,25 +85,26 @@ class MultiThreadedCrawler(object):
         self.credentials = credentials
         self.colleges = colleges
         self.threads = []
-        self.q = Queue(maxsize=len(credentials))
         self.start = start
         self.end = end
 
     def queue_up(self):
-        for credential, college in zip(self.credentials, self.colleges):
-            start = int(self.start.strftime("%s")) * 1000
+        q = Queue(maxsize=len(self.colleges))
+        for college in self.colleges:
+            q.put_nowait(college)
+
+        for credential in self.credentials:
+            start = int(self.start.strftime("%s"))
             delta = (self.start - self.end)
-            end = int(delta.strftime("%s")) * 1000
-            print start, end
+            end = int(delta.strftime("%s"))
             username , password = credential
-            self.q.put_nowait(college)
             client = RedditApiClient(username, password, start=start, end=end)
             mongodb = pymongo.MongoClient()['reddit']
-            self.threads.append(RedditThread(username, client, mongodb))
+            self.threads.append(RedditThread(username, client, mongodb, q))
 
     def begin(self):
         for thread in self.threads:
-            thread.start(self.q)
+            thread.start()
 
 
 
@@ -181,6 +179,6 @@ def serialize_comment(comment, subreddit, college):
         }
 
 if __name__ == '__main__':
-    multi = MultiThreadedCrawler([CREDENTIALS[0]], SUBREDDITS)
+    multi = MultiThreadedCrawler(CREDENTIALS[:2], SUBREDDITS)
     multi.queue_up()
     multi.begin()
