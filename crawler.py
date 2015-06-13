@@ -4,6 +4,7 @@ import random
 import threading
 import string
 from datetime import datetime, timedelta
+from collections import deque
 from config import PRAW_PASSWORD, PRAW_USERNAME, SUBREDDITS, CREDENTIALS
 from analysis import KeywordExtractor
 from Queue import Queue
@@ -12,10 +13,21 @@ from Queue import Queue
 db = pymongo.MongoClient()['reddit']
 
 class RedditApiClient(object):
+    """ Wrapper around praw """
+
     CLOUD_QUERY = 'timestamp:{end}..{start}'
     CLOUD_SYNTAX = 'cloudsearch' 
 
     def __init__(self, username, password, mongodb, start, end, interval=timedelta(weeks=12)):
+        """
+        Input:
+            username <string> : reddit username
+            password <string> : reddit password
+            mongodb: mongodb db object
+            start <datetime> : start time   
+            end <datetime> : end time
+            interval <timedelta> : amount the increment gets shifted each request
+        """
         self.reddit = praw.Reddit(self._random_name())
         self.reddit.login(username, password)
         self.mongodb = mongodb
@@ -25,17 +37,26 @@ class RedditApiClient(object):
         return
     
     def crawl(self, college_info, limit=None, sort='new'):
+        """
+        Crawl the specified subreddit in the range (self.start, self.end)
+
+        Input:
+            college_info <dict>: { 'name': name of the college, 'subreddit': name of the subreddit}
+            limit <int> : max number of posts to return per call
+            sort <string> : sort order of the returned posts
+        """
         college, subreddit = college_info['name'], college_info['subreddit']
         upper = self.start
         lower = upper - self.interval
-        # trying to guard against the case where the chuncks overlap and
-        # you wind up loosing a lot of posts, definately a better way to 
-        # do this
         while lower > self.end:
             start_seconds = self._to_seconds(upper)
             end_seconds = self._to_seconds(lower)
             upper = lower
             lower = lower - self.interval
+
+            # if the  lower bound is past the beginning of our range just set 
+            # the range equal to the beginning of the range
+
             if lower < self.end:
                 lower = self.end
             query = self.CLOUD_QUERY.format(start=start_seconds, end=end_seconds)
@@ -43,14 +64,19 @@ class RedditApiClient(object):
             posts = self.reddit.search(query, subreddit=subreddit, sort=sort, limit=None,
                     syntax=self.CLOUD_SYNTAX)
             for post in posts:
+                comment_ids = []
                 try:
-                    comment_ids = []
                     post.replace_more_comments(limit=None, threshold=0)
-                    comments = praw.helpers.flatten_tree(post.comments)
-                    for comment in comments:
+                    comment_stack = deque(post.comments)
+                    while len(comment_stack):
+                        comment = comment_stack.popleft()
                         _id = self.mongodb.comments.insert(
                             self.serialize_comment(comment, subreddit, college))
                         comment_ids.append(_id)
+                        replies = comment.replies
+                        if replies:
+                            comment_stack.extend(replies)
+
                 except Exception as e:
                     print e
                 mongo_record = serialize_post(post, subreddit, college)
@@ -58,17 +84,44 @@ class RedditApiClient(object):
                 self.mongodb.posts.insert(mongo_record)
         return
     
-    def update(self, subreddit, limit=30):
-        return self.reddit.get_subreddit(subreddit).get_new(limit=limit)
+    def update(self, college_info, n=30):
+        """
+        Request the last n posts
+
+        Input:
+            subreddit <int>:
+            limit:
+        """
+        return self.reddit.get_subreddit(college_info['subreddit']).get_new(limit=n)
 
     def _random_name(self, length=10):
+        """
+        Generate random alphabetical string
+
+        Input:
+            length <int> : length of the generated string
+        """
         return ''.join(random.choice(string.ascii_letters) for i in range(length))
 
     def _to_seconds(self, dt):
+        """
+        Convert a datetime object to seconds
+
+        Input:
+            dt <datetime>:
+        """
         return int(dt.strftime('%s'))
 
     def serialize_post(self, submission, college, subreddit):
-     return {
+        """
+        Convert a praw post object to a dictionary
+
+        Input:
+            submission <praw.post>: praw post object
+            college <string> : college name
+            subreddit <submission> : subreddit
+        """
+        return {
             'rid': submission.id,
             'title': submission.title,
             'text': submission.selftext,
@@ -82,6 +135,13 @@ class RedditApiClient(object):
         }
 
     def serialize_comment(self, comment, subreddit, college):
+        """
+        Convert a praw  comment object to a dictionary
+        Input:
+            submission <praw.comment> : praw comment object
+            college <string> : college name
+            subreddit <string> : subreddit name
+        """
         return {
             'rid': comment.id,
             'text': comment.body, 
@@ -93,8 +153,15 @@ class RedditApiClient(object):
         }
 
 class RedditThread(threading.Thread):
+    """ self contained thread object """
 
     def __init__(self, threadID, reddit_client, q):
+        """
+        Input:
+            threadID: identifier for the thread
+            reddit_client <praw.reddit> : praw.reddit object used for communicating with reddit api
+            q <Queue> : queue containing college infos
+        """
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.reddit_client = reddit_client
@@ -102,13 +169,23 @@ class RedditThread(threading.Thread):
         return
 
     def run(self):
+        """
+            Crawl the college retrieved form the queue
+        """
         while not self.q.empty():
             college_info = self.q.get_nowait()
             self.reddit_client.crawl(college_info)
     
 class MultiThreadedCrawler(object):
-
+    
     def __init__(self, credentials, colleges, start=datetime.now(), end=datetime(2010, 1, 1)):
+        """
+        Input:
+            credentials[] <dict>: array of {'username', 'password'}
+            colleges[] <dict>: array of {'name', 'subreddit'}
+            start <datetime>: time to start crawling from
+            end <datetime>: time to crawl till
+        """
         self.credentials = credentials
         self.colleges = colleges
         self.threads = []
@@ -116,6 +193,9 @@ class MultiThreadedCrawler(object):
         self.end = end
 
     def queue_up(self):
+        """
+        Initialize the queue with the colleges
+        """
         q = Queue(maxsize=len(self.colleges))
         for college in self.colleges:
             q.put_nowait(college)
@@ -127,6 +207,9 @@ class MultiThreadedCrawler(object):
             self.threads.append(RedditThread(username, client, q))
 
     def begin(self):
+        """
+        Activate the threads 
+        """
         for thread in self.threads:
             thread.start()
 
