@@ -49,40 +49,56 @@ class RedditApiClient(object):
         upper = self.start
         lower = upper - self.interval
         while lower > self.end:
+            print college, str(lower.date()), str(upper.date())
+
             start_seconds = self._to_seconds(upper)
             end_seconds = self._to_seconds(lower)
             upper = lower
             lower = lower - self.interval
 
             # if the  lower bound is past the beginning of our range just set 
-            # the range equal to the beginning of the range
+            # the lower bound equal to the beginning of the range
 
             if lower < self.end:
                 lower = self.end
             query = self.CLOUD_QUERY.format(start=start_seconds, end=end_seconds)
-            print college, str(lower.date()), str(upper.date())
-            posts = self.reddit.search(query, subreddit=subreddit, sort=sort, limit=None,
-                    syntax=self.CLOUD_SYNTAX)
+            posts = self.reddit.search(query, subreddit=subreddit, 
+                sort=sort, limit=None,syntax=self.CLOUD_SYNTAX)
             for post in posts:
-                comment_ids = []
                 try:
-                    post.replace_more_comments(limit=None, threshold=0)
-                    comment_stack = deque(post.comments)
-                    while len(comment_stack):
-                        comment = comment_stack.popleft()
-                        _id = self.mongodb.comments.insert(
-                            self.serialize_comment(comment, subreddit, college))
-                        comment_ids.append(_id)
-                        replies = comment.replies
-                        if replies:
-                            comment_stack.extend(replies)
-
+                    comments = self.process_comments(post, subreddit, college)
                 except Exception as e:
                     print e
-                mongo_record = serialize_post(post, subreddit, college)
-                mongo_record['comments'] = comment_ids
-                self.mongodb.posts.insert(mongo_record)
+                finally:
+                    mongo_record = serialize_post(post, subreddit, college)
+                    if comments:
+                        comment_ids = self.mongodb.comments.insert(comments)
+                        mongo_record['comments'] = comment_ids
+                    self.mongodb.posts.insert(mongo_record)
+       
+        print 'Finished {}'.format(college)            
         return
+
+    def process_comments(self, post, subreddit, college):
+        """
+        Retrieve the comments of a post
+
+        Input:
+            post <praw.post> : a praw post object 
+            subreddit <string> : the subreddit to crawl
+            college <string> : the college name
+        """
+        comments = []
+        post.replace_more_comments(limit=None, threshold=0)
+        comment_stack = deque(post.comments)
+        while len(comment_stack):
+            comment = comment_stack.popleft()
+            replies = comment.replies
+            comment = self.serialize_comment(comment, subreddit, college)
+            comments.append(comment)
+            if replies:
+                comment_stack.extend(replies)
+        return comments
     
     def update(self, college_info, n=30):
         """
@@ -172,13 +188,15 @@ class RedditThread(threading.Thread):
         """
             Crawl the college retrieved form the queue
         """
+        print '{} started'.format(self.threadID)
         while not self.q.empty():
             college_info = self.q.get_nowait()
+            print '{} aqcuired {}'.format(self.threadID, college_info['name'])
             self.reddit_client.crawl(college_info)
     
 class MultiThreadedCrawler(object):
     
-    def __init__(self, credentials, colleges, start=datetime.now(), end=datetime(2010, 1, 1)):
+    def __init__(self, credentials, colleges, start=datetime.now(), end=datetime(2013, 1, 1)):
         """
         Input:
             credentials[] <dict>: array of {'username', 'password'}
@@ -191,6 +209,7 @@ class MultiThreadedCrawler(object):
         self.threads = []
         self.start = start
         self.end = end
+        self.mongodb_client = pymongo.MongoClient()['reddit']
 
     def queue_up(self):
         """
@@ -202,22 +221,16 @@ class MultiThreadedCrawler(object):
 
         for credential in self.credentials:
             username , password = credential
-            mongodb = pymongo.MongoClient()['reddit']
-            client = RedditApiClient(username, password, mongodb, start=self.start, end=self.end)
+            client = RedditApiClient(username, password, self.mongodb_client, start=self.start, end=self.end)
             self.threads.append(RedditThread(username, client, q))
 
     def begin(self):
         """
         Activate the threads 
         """
+        print 'Starting the threads'
         for thread in self.threads:
             thread.start()
-
-
-
-
-
-
 
 
 def main():
