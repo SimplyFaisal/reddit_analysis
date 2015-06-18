@@ -67,13 +67,20 @@ class RedditApiClient(object):
             for post in posts:
                 try:
                     comments = self.process_comments(post, subreddit, college)
+                    mongo_record = serialize_post(post, subreddit, college)
+                    if comments:
+                        comment_ids = []
+                        # we could just batch insert them but the multithreading
+                        # causes a lot of duplicate key errors. An alternative
+                        # would be to key the comments by their reddit id, but
+                        # I don't know how unique they are
+                        for comment in comments:
+                            _id = self.mongodb.comments.insert(comments)
+                            comment_ids.append(_id)
+                        mongo_record['comments'] = comment_ids
                 except Exception as e:
                     print e
                 finally:
-                    mongo_record = serialize_post(post, subreddit, college)
-                    if comments:
-                        comment_ids = self.mongodb.comments.insert(comments)
-                        mongo_record['comments'] = comment_ids
                     self.mongodb.posts.insert(mongo_record)
        
         print 'Finished {}'.format(college)            
@@ -211,7 +218,7 @@ class MultiThreadedCrawler(object):
         self.end = end
         self.mongodb_client = pymongo.MongoClient()['reddit']
 
-    def queue_up(self):
+    def _queue_up(self):
         """
         Initialize the queue with the colleges
         """
@@ -228,6 +235,7 @@ class MultiThreadedCrawler(object):
         """
         Activate the threads 
         """
+        self._queue_up()
         print 'Starting the threads'
         for thread in self.threads:
             thread.start()
@@ -300,5 +308,4 @@ def serialize_comment(comment, subreddit, college):
 
 if __name__ == '__main__':
     multi = MultiThreadedCrawler(CREDENTIALS, SUBREDDITS)
-    multi.queue_up()
     multi.begin()
