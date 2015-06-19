@@ -20,6 +20,8 @@ def recent(college, limit=30):
         'college': college,
         }).limit(limit)
 
+def most_recent(limit=30):
+    return db.posts.find({}).limit(limit)
 def query_college(college): 
     return db.posts.find({'college': college})
 
@@ -127,7 +129,7 @@ class KeywordExtractor(object):
             [self.get_text(document) for document in documents])
         self.vocabulary_keys = self.cv.vocabulary_.keys()
         self.vocabulary_values = self.cv.vocabulary_.values()
-        return self._fit_transform(word_counts).toarray()[:len(documents) - 1]
+        return self._fit_transform(word_counts).toarray()[:len(list(documents)) - 1]
 
     def extract(self, documents,threshold=0.25):
         tfidf_vectors = self.compute(documents)
