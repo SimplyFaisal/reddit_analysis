@@ -3,11 +3,14 @@ import praw
 import random
 import threading
 import string
+import binascii
+import bson
 from datetime import datetime, timedelta
 from collections import deque
 from config import PRAW_PASSWORD, PRAW_USERNAME, SUBREDDITS, CREDENTIALS
 from analysis import KeywordExtractor
 from Queue import Queue
+
 
 
 db = pymongo.MongoClient()['reddit']
@@ -65,18 +68,15 @@ class RedditApiClient(object):
             posts = self.reddit.search(query, subreddit=subreddit, 
                 sort=sort, limit=None,syntax=self.CLOUD_SYNTAX)
             for post in posts:
+                mongo_record = self.serialize_post(post, subreddit, college)
                 try:
                     comments = self.process_comments(post, subreddit, college)
-                    mongo_record = serialize_post(post, subreddit, college)
                     if comments:
-                        comment_ids = []
                         # we could just batch insert them but the multithreading
-                        # causes a lot of duplicate key errors. An alternative
+                        # causes a infrequent duplicate key errors. An alternative
                         # would be to key the comments by their reddit id, but
                         # I don't know how unique they are
-                        for comment in comments:
-                            _id = self.mongodb.comments.insert(comments)
-                            comment_ids.append(_id)
+                        comment_ids = self.mongodb.comments.insert(comments)
                         mongo_record['comments'] = comment_ids
                 except Exception as e:
                     print e
@@ -113,7 +113,7 @@ class RedditApiClient(object):
 
         Input:
             subreddit <int>:
-            limit:
+            n <int>: limit
         """
         return self.reddit.get_subreddit(college_info['subreddit']).get_new(limit=n)
 
@@ -145,7 +145,7 @@ class RedditApiClient(object):
             subreddit <submission> : subreddit
         """
         return {
-            'rid': submission.id,
+            '_id': self.create_object_id(submission.id),
             'title': submission.title,
             'text': submission.selftext,
             'url': submission.url, 
@@ -166,7 +166,7 @@ class RedditApiClient(object):
             subreddit <string> : subreddit name
         """
         return {
-            'rid': comment.id,
+            '_id': self.create_object_id(comment.id),
             'text': comment.body, 
             'ups' : comment.ups, 
             'downs': comment.downs,
@@ -174,6 +174,10 @@ class RedditApiClient(object):
             'subreddit' : subreddit,
             'created_utc': datetime.utcfromtimestamp(comment.created_utc)
         }
+
+    def create_object_id(self, s):
+        return bson.ObjectId(binascii.hexlify(s).zfill(24))
+       
 
 class RedditThread(threading.Thread):
     """ self contained thread object """
@@ -228,6 +232,7 @@ class MultiThreadedCrawler(object):
 
         for credential in self.credentials:
             username , password = credential
+            mongodb = pymongo.MongoClient()['reddit']
             client = RedditApiClient(username, password, self.mongodb_client, start=self.start, end=self.end)
             self.threads.append(RedditThread(username, client, q))
 
@@ -280,31 +285,6 @@ def crawl_subreddit(posts, college , subreddit):
     db.posts.insert(records)
     print '{} : {} posts {} comments'.format(college, p, c)
     return
-
-def serialize_post(submission, subreddit, college):
-     return {
-            'rid': submission.id,
-            'title': submission.title,
-            'text': submission.selftext,
-            'url': submission.url, 
-            'ups': submission.ups, 
-            'downs': submission.downs,
-            'subreddit': subreddit, 
-            'college': college,     
-            'created_utc': datetime.utcfromtimestamp(submission.created_utc),
-            'comments': []
-        }
-        
-def serialize_comment(comment, subreddit, college):
-    return {
-            'rid': comment.id,
-            'text': comment.body, 
-            'ups' : comment.ups, 
-            'downs': comment.downs,
-            'college': college, 
-            'subreddit' : subreddit,
-            'created_utc': datetime.utcfromtimestamp(comment.created_utc)
-        }
 
 if __name__ == '__main__':
     multi = MultiThreadedCrawler(CREDENTIALS, SUBREDDITS)
