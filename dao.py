@@ -9,6 +9,9 @@ def query(college, start, end):
         'created_utc': {'$lte': start, '$gte': end}
         })
 
+def distinct_colleges():
+    return list(mongodb.posts.distinct('subreddit'))
+
 def populate_comments(post):
     comments = []
     for comment in post['comments']:
@@ -20,3 +23,10 @@ def join_comments(posts):
     for post in posts:
         comments.extend(populate_comments(post))
     return posts + comments
+
+def get_post(_id):
+    return mongodb.posts.find_one({'_id': _id})
+
+def get_comment(_id):
+    return mongodb.comments.find_one({'_id': _id})
+

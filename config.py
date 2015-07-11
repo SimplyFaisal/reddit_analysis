@@ -1,6 +1,7 @@
 
 
 SUBREDDITS = [{'name': 'McGill University', 'subreddit': 'mcgill'}, 
+            {'name': 'Georgia Tech', 'subreddit': 'gatech'}, 
             {'name': 'UT Austin', 'subreddit': 'UTAustin'}, 
             {'name': 'Penn State University', 'subreddit': 'PennStateUniversity'}, 
             {'name': 'Purdue', 'subreddit': 'purdue'}, 
@@ -8,7 +9,6 @@ SUBREDDITS = [{'name': 'McGill University', 'subreddit': 'mcgill'},
             {'name': 'CalPoly Ubispo', 'subreddit': 'CalPoly'}, 
             {'name': 'UC Santa Barbara', 'subreddit': 'ucsantabarbara'}, 
             {'name': 'North Carolina State University', 'subreddit': 'ncsu'}, 
-            {'name': 'Georgia Tech', 'subreddit': 'gatech'}, 
             {'name': 'York University', 'subreddit': 'yorku'}, 
             {'name': 'Texas A&M', 'subreddit': 'aggies'}, 
             {'name': 'Arizona State University', 'subreddit': 'asu'}, 

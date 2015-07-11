@@ -14,20 +14,29 @@ def cosine_graph(corpus, threshold):
     vectors = keyword_extractor.compute(corpus)
     nodes = [{'title': doc['text']} for doc in corpus]
     edges = []
-    angles = []
     for i, v in enumerate(vectors):
         for j, k in enumerate(vectors):
             if i == j:
                 continue
             else:
                 angle = v.dot(k)
-                angles.append(angle)
                 if angle >= threshold:
                     edge = {'source': i, 'target': j}
                     edges.append(edge)
-    _max = max(angles)
     return {'nodes': nodes, 'edges': edges}
 
+def get_colleges_handler():
+    return dao.distinct_colleges()
+
+def get_post_handler(_id):
+    return dao.get_post(_id)
+
+def get_comment_handler(_id):
+    return dao.get_comment(_id)
+
+def get_comments_handler(_id):
+    post = dao.get_post(_id)
+    return dao.populate_comments(post)
 
 def dt_from_timestamp(s):
-    return datetime.strptime(s, '%a %b %d %Y')
+    return datetime.strptime(s, '%b %d %Y')
