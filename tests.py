@@ -48,15 +48,21 @@ class KeywordTests(unittest.TestCase):
 
     def test_extract(self):
         vectors = self.keywords.compute(self.documents)
-        terms = []
+        freqdist  = []
         for document, vector in zip(self.documents, vectors):
+            terms = []
             for i, score in enumerate(vector):
-                if score > 0.15:
+                if score > 0.3:
                     term = self.keywords.vocabulary_keys[self.keywords.vocabulary_values.index(i)]
                     terms.append(term)
-        cfd = Counter(terms)
-        for i, v in  cfd.most_common(50):
-            print i, v
+            freqdist.extend(terms)
+            # print document['text']
+            # print '--------'
+            # print ','.join(terms)
+        # cnt = Counter(freqdist)
+        # for word, val in cnt.most_common(50):
+        #     print word, val
+        
 
 if __name__ == '__main__': 
     unittest.main()

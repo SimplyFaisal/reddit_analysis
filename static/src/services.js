@@ -5,12 +5,13 @@ Flask.$inject = ['$http'];
 function Flask($http) {
     var service = {};
 
-    service.createGraph = function(college, day, threshold) {
+    service.createGraph = function(college, start, end, threshold) {
         return $http({
             method: 'GET',
-            url: '/' + college + '/' + day +'/' + threshold,
+            url: '/' + college + '/' + start +'/' + end + '/'+ threshold,
             data: {
-                day: day,
+                start: start,
+                end: end,
                 threshold: threshold
             }
         });

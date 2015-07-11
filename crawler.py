@@ -5,6 +5,7 @@ import threading
 import string
 import binascii
 import bson
+import sys
 from datetime import datetime, timedelta
 from collections import deque
 from config import PRAW_PASSWORD, PRAW_USERNAME, SUBREDDITS, CREDENTIALS
@@ -115,7 +116,10 @@ class RedditApiClient(object):
         """
         start = datetime.now()
         end = self.last_post_date(college_info)
-        return self.crawl(college_info,start=start, end=end)
+        if end:
+            self.crawl(college_info, start=start, end=end)
+        else:
+            self.crawl(college_info)
 
     def _random_name(self, length=10):
         """
@@ -188,6 +192,7 @@ class RedditApiClient(object):
         Returns: A datetime object
         """
         college = college_info['name']
+        print college
         last_post_query = self.mongodb.posts.find({'college': college}).sort('created_utc', 
                         pymongo.DESCENDING).limit(1)
         try:
@@ -196,8 +201,8 @@ class RedditApiClient(object):
             # again.
             return last_post_date + timedelta(seconds=10)
         except IndexError as e:
-            print 'No posts for {}'.format(college)
-            exit()
+            return False
+
        
 
 class RedditThread(threading.Thread):
@@ -207,7 +212,8 @@ class RedditThread(threading.Thread):
         """
         Input:
             threadID: identifier for the thread
-            reddit_client <praw.reddit> : praw.reddit object used for communicating with reddit api
+            reddit_client <praw.reddit> : praw.reddit object used for
+                communicating with reddit api
             q <Queue> : queue containing college infos
         """
         threading.Thread.__init__(self)
@@ -234,7 +240,8 @@ class RedditThread(threading.Thread):
     
 class MultiThreadedCrawler(object):
     
-    def __init__(self, credentials, colleges, start=datetime.now(), end=datetime(2013, 1, 1), update_mode=True):
+    def __init__(self, credentials, colleges, start=datetime.now(), 
+            end=datetime(2013, 1, 1), update_mode=True):
         """
         Input:
             credentials[] <dict>: array of {'username', 'password'}
@@ -261,8 +268,10 @@ class MultiThreadedCrawler(object):
         for credential in self.credentials:
             username , password = credential
             mongodb = pymongo.MongoClient()['reddit']
-            client = RedditApiClient(username, password, self.mongodb_client, start=self.start, end=self.end)
-            self.threads.append(RedditThread(username, client, q, update_mode=self.update_mode))
+            client = RedditApiClient(username, password, self.mongodb_client, 
+                start=self.start, end=self.end)
+            self.threads.append(RedditThread(username, client, q, 
+                update_mode=self.update_mode))
 
     def begin(self):
         """
@@ -275,5 +284,6 @@ class MultiThreadedCrawler(object):
 
 
 if __name__ == '__main__':
-    multi = MultiThreadedCrawler(CREDENTIALS, SUBREDDITS, update_mode=False)
+    update_mode = '-u' in sys.argv
+    multi = MultiThreadedCrawler(CREDENTIALS, SUBREDDITS, update_mode=update_mode)
     multi.begin()

@@ -7,9 +7,10 @@ application = Flask(__name__, static_url_path='')
 def root():
     return render_template('index.html')
     
-@application.route('/<college>/<day>/<threshold>')
-def create_graph(college, day, threshold):
-    return jsonify(data=handlers.create_graph_handler(college, day, float(threshold)))
+@application.route('/<college>/<start>/<end>/<threshold>')
+def create_graph(college, start, end, threshold):
+    return jsonify(data=handlers.create_graph_handler(
+        college, start, end, float(threshold)))
 
 @application.route('/colleges')
 def get_colleges():

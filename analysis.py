@@ -15,13 +15,11 @@ def search(college, term, limit=30):
             'college': college
     }).limit(limit)
 
-def recent(college, limit=30):
-    return db.posts.find({
+def recent(college, collection, limit=30):
+    return db[collection].find({
         'college': college,
-        }).limit(limit)
+        }).sort('created_utc', pymongo.DESCENDING).limit(limit)
 
-def most_recent(limit=30):
-    return db.posts.find({}).limit(limit)
 def query_college(college): 
     return db.posts.find({'college': college})
 
@@ -84,54 +82,70 @@ class SankeyFormatter(object):
 
 class KeywordExtractor(object):
 
-    def __init__(self, training_set=None, stemmer=PorterStemmer(), 
-                stopwords=nltk.corpus.stopwords.words('english'), 
+    def __init__(self, stopwords=nltk.corpus.stopwords.words('english'), 
                 get_text=lambda x: x):
-        self.training_set = training_set
+        """
+        Input:
+            stopwords list<str>: list of terms to ignore
+            get_text <function>: text accessor function to retrieve strings.
+
+        """
         self.stopwords = set(stopwords)
-        self.stemmer = stemmer
         self.tfidf_transformer = feature_extraction.text.TfidfTransformer()
-        self.cv = feature_extraction.text.CountVectorizer(stop_words=stopwords)
+        self.cv = feature_extraction.text.CountVectorizer(stop_words=stopwords, ngram_range=(1,1))
         self.get_text = get_text
         self.vocabulary_keys = None
         self.vocabulary_values = None
         return
 
-    def _clean(self, document):
-      remove_punct = ''.join(''.join(char for char in self._stem(word.lower())
-                                     if char not in string.punctuation) for word in document
-                                     )
-      return remove_punct
-  
-    def _clean_documents(self, documents):
-      cleaned = [self._clean(document) for document in documents]
-      return cleaned
-
-    def _stem(self, token):
-      return self.stemmer.stem(token)
-
-    def _train(self):
-      word_counts = self._count_vectorize(self.training_set)
-      self._fit_transform(word_counts)        
-
     def _count_vectorize(self, documents):
-        if self.training_set:
-            documents = documents + [self.get_text(record) for record in self.training_set]
+        """
+
+        Input:
+            documents list<str>: list of documents
+
+        Returns:
+
+        """
         return self.cv.fit_transform(documents)
       
 
     def _fit_transform(self, vectors):
-      vectors = self.tfidf_transformer.fit_transform(vectors)
-      return vectors
+        """
+
+        Input:
+            vectors:
+
+        Returns:
+
+        """
+        return self.tfidf_transformer.fit_transform(vectors)
+        
 
     def compute(self, documents):
+        """
+
+        Input: 
+            documents list<T> : list of documents
+
+        Returns:
+
+        """
         word_counts = self._count_vectorize(
             [self.get_text(document) for document in documents])
         self.vocabulary_keys = self.cv.vocabulary_.keys()
         self.vocabulary_values = self.cv.vocabulary_.values()
-        return self._fit_transform(word_counts).toarray()[:len(list(documents)) - 1]
+        return self._fit_transform(word_counts).toarray()
 
-    def extract(self, documents,threshold=0.25):
+
+    def extract(self, documents, threshold=0.25):
+        """
+        Input:
+            documents list<T> : list of documents
+            threshold <int> : value to filter out relevant terms
+            post_process <function> : function to perform once the relevant
+                terms have been identified. Expects (document, terms)
+        """
         tfidf_vectors = self.compute(documents)
         for i, document in enumerate(tfidf_vectors):
             terms = []
@@ -139,3 +153,4 @@ class KeywordExtractor(object):
                 if score > threshold:
                     term = self.vocabulary_keys[self.vocabulary_values.index(j)]
                     terms.append(term)
+            

@@ -1,18 +1,21 @@
 import dao
 import analysis
-from datetime import datetime, timedelta
+from datetime import datetime
 
-def create_graph_handler(college, day, threshold):
-    start = dt_from_timestamp(day)
-    end = start - timedelta(hours=24)
+def create_graph_handler(college, start, end, threshold):
+    start = dt_from_timestamp(start)
+    end = dt_from_timestamp(end)
     posts = list(dao.query(college, start, end))
+    for post in posts:
+        post['color'] = 'red'
     corpus = dao.join_comments(posts)
+    print len(corpus)
     return cosine_graph(corpus, threshold)
 
 def cosine_graph(corpus, threshold):
     keyword_extractor = analysis.KeywordExtractor(get_text=lambda x: x['text'])
     vectors = keyword_extractor.compute(corpus)
-    nodes = [{'title': doc['text']} for doc in corpus]
+    nodes = [{'title': doc['text'], 'color': doc['color']} for doc in corpus]
     edges = []
     for i, v in enumerate(vectors):
         for j, k in enumerate(vectors):

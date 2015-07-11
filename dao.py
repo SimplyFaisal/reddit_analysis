@@ -6,7 +6,7 @@ mongodb = pymongo.MongoClient()['reddit']
 def query(college, start, end):
     return mongodb.posts.find({
         'subreddit': college,
-        'created_utc': {'$lte': start, '$gte': end}
+        'created_utc': {'$lte': end, '$gte': start}
         })
 
 def distinct_colleges():
@@ -15,7 +15,10 @@ def distinct_colleges():
 def populate_comments(post):
     comments = []
     for comment in post['comments']:
-        comments.append(mongodb.comments.find_one({'_id': comment}))
+        result = mongodb.comments.find_one({'_id': comment})
+        result['color'] = 'blue'
+        comments.append(result)
+
     return comments
 
 def join_comments(posts):
