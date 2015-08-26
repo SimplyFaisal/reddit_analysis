@@ -53,8 +53,8 @@ function ForceLayoutGraph() {
                                     .nodes(data.nodes)
                                     .links(data.edges)
                                     .size([w, h])
-                                    .linkDistance([50])
-                                    .charge([-75])
+                                    .linkDistance([20])
+                                    .charge([-20])
                                     .start();
 
                     var edges = svg.selectAll('line')
@@ -68,7 +68,7 @@ function ForceLayoutGraph() {
                                     .data(data.nodes)
                                     .enter()
                                     .append('circle')
-                                    .attr('r', 10)
+                                    .attr('r', 5)
                                     .style('fill', function(d) {return d.color;})
                                     .call(force.drag);
 

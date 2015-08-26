@@ -91,6 +91,7 @@ class KeywordExtractor(object):
 
         """
         self.stopwords = set(stopwords)
+        self.stopwords.add('thanks')
         self.tfidf_transformer = feature_extraction.text.TfidfTransformer()
         self.cv = feature_extraction.text.CountVectorizer(stop_words=stopwords, ngram_range=(1,1))
         self.get_text = get_text

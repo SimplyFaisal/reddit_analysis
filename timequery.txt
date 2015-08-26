@@ -1,0 +1,21 @@
+db.posts.aggregate([
+    {$match:{college: 'Georgia Tech'}},
+    {$project: {
+        y: {$year: '$created_utc'},
+        m: {$month: '$created_utc'},
+        d: {$dayOfMonth: '$created_utc'}
+     }},
+     {$group: {
+         _id: {
+             year: '$y',
+             month: '$m',
+             day: '$d'
+         },
+         total: {$sum: 1}
+     }},
+     {$sort:{
+         '_id.year': -1,
+         '_id.month': -1,
+         '_id.day' : -1
+         }}
+])

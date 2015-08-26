@@ -5,7 +5,7 @@ mongodb = pymongo.MongoClient()['reddit']
 
 def query(college, start, end):
     return mongodb.posts.find({
-        'subreddit': college,
+        'college': college,
         'created_utc': {'$lte': end, '$gte': start}
         })
 
