@@ -12,6 +12,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(leve
 logging.getLogger('requests').setLevel(logging.CRITICAL)
 logger = logging.getLogger(__name__)
 
+db = pymongo.MongoClient()['reddit']
 
 class RedditApiClient(object):
     """ Wrapper around praw """
@@ -40,7 +41,7 @@ class RedditApiClient(object):
         """
         start_seconds = self.to_seconds(start)
         end_seconds = self.to_seconds(end)
-        # Format the string to create a cloud query that restricts the returned 
+        # Format the string to create a cloud query that restricts the returned
         # posts to those between the start and end date.
         query = self.CLOUD_QUERY.format(start=start_seconds, end=end_seconds)
         posts = self.reddit.search(query, subreddit=subreddit,
@@ -65,7 +66,7 @@ class RedditApiClient(object):
         Input:
             length <int> : length of the generated string
         """
-        return ''.join(random.choice(string.ascii_letters) 
+        return ''.join(random.choice(string.ascii_letters)
             for i in range(length))
 
     def to_seconds(self, dt):
@@ -76,12 +77,12 @@ class RedditApiClient(object):
             dt <datetime>:
         """
         return int(dt.strftime('%s'))
-   
+
 
 class RedditWorker(threading.Thread):
     """ self contained thread object """
 
-    def __init__(self, reddit_client, database_client, q, 
+    def __init__(self, reddit_client, database_client, q,
             interval=timedelta(days=1)):
         """
         Input:
@@ -129,7 +130,7 @@ class RedditWorker(threading.Thread):
             lower -= self.interval
             if lower < end:
                 lower = end
-    
+
     def get_start_time(self, college_info):
         return self.database_client.last_post_date(college_info)
 
@@ -182,7 +183,7 @@ class MongoDBService(object):
         comment_count = 0
         for post in posts:
             # TODO(faisal): add error handling capability.
-            comment_records = [self.serialize_comment(comment, college_info) 
+            comment_records = [self.serialize_comment(comment, college_info)
                 for comment in get_comments(post)]
             post_record = self.serialize_post(post, college_info)
             comment_ids = []
@@ -215,7 +216,7 @@ class MongoDBService(object):
         Returns the date of the last post crawled for the request school
 
         Input:
-            college_info <dict>: { 'name': name of the college, 
+            college_info <dict>: { 'name': name of the college,
                 'subreddit': name of the subreddit}
 
         Returns: A datetime object
